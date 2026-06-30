@@ -1,0 +1,7 @@
+/target
+
+# Profile
+names.txt
+
+# AI Assistant
+.agent/
