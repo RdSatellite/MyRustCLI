@@ -1,5 +1,8 @@
 /target
 
+# Envs
+.env
+
 # Profile
 names.txt
 

@@ -1,75 +1,55 @@
+mod client;
+mod user;
+
 use std::{
-    fs::{self}, 
+    env,
     io::{self, Write}
 };
 
-fn main() {
-    let mut name = load_or_init_user();
-    run_cli_loop(&mut name);
+use client::{ OpenAIClient };
+use user::User;
+
+#[tokio::main]
+async fn main() {
+    let mut user = match User::load_or_init() {
+        Some(existing_user) => existing_user,
+        None => {
+            let name = prompt_input("Hi, what's your name?");
+            User::new(name)
+        }
+    };
+
+    let base_url = env::var("BASE_URL")
+        .expect("Environment variable BASE_URL must be set");
+    let api_key = env::var("API_KEY")
+        .expect("Environment variable API_KEY must be set");
+    let client = OpenAIClient::new(base_url, api_key);
+
+    run_cli_loop(&mut user, &client).await;
 }
 
-
-fn load_or_init_user() -> String {
-    match fs::read_to_string("names.txt") {
-        Ok(name) => {
-            let name = name.trim().to_string();
-            println!("Welcome back, {name}!");
-            name
-        }
-        Err(_) => {
-            println!("Hi, what's your name?");
-
-            let mut input = String::new();
-            io::stdin()
-                .read_line(&mut input)
-                .expect("Failed to read line");
-
-            let name = input.trim().to_string();
-
-            fs::write("names.txt", &name)
-                .expect("Failed to write file");
-
-            println!("Hello, {name}!");
-            name
-        }
-    }
-}
-
-
-fn run_cli_loop(name: &mut String) {
+async fn run_cli_loop(
+    user: &mut User,
+    client: &OpenAIClient,
+) {
     loop {
         println!("\nCommands: profile | rename | exit");
-        print!("> ");
-        io::stdout().flush().unwrap();
+        let cmd = prompt_input(">");
 
-        // Get command
-        let mut cmd = String::new();
-        io::stdin()
-            .read_line(&mut cmd)
-            .expect("Failed to read line");
-        let cmd = cmd.trim();
-
-        match cmd {
+        match cmd.as_str() {
             "profile" => {
-                println!("Your name: {name}");
+                println!("Your name: {}", user.name());
             }
 
             "rename" => {
-                println!("Enter new name:");
-
-                let mut new_name = String::new();
-                io::stdin()
-                    .read_line(&mut new_name)
-                    .expect("Failed to read line");
-                let new_name = new_name.trim().to_string();
-
-                *name = new_name.clone();
-
-                fs::write("names.txt", &name)
-                    .expect("Failed to write file");
-
+                let new_name = prompt_input("Enter new name:");
+                user.rename(&new_name);
                 println!("Name updated!");
             }
+
+            // "chat" => {
+            //     chat_loop(user, client).await;
+            // }
 
             "exit" => {
                 println!("Bye!");
@@ -81,4 +61,27 @@ fn run_cli_loop(name: &mut String) {
             }
         }
     }
+}
+
+// async fn chat_loop(
+//     user: &user,
+//     client: &OpenAIClient,
+// ) {
+
+// }
+
+fn prompt_input(message: &str) -> String {
+    if message == ">" {
+        print!(">");
+    } else {
+        println!("{message}");
+    }
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read line");
+
+    input.trim().to_string()
 }
