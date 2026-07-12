@@ -1,54 +1,50 @@
-mod llm;
-mod user;
+mod character;
+mod dialogue;
 
 use std::{
-    env, 
+    env,
     io::{self, Write},
-    collections::HashMap
 };
 
-use llm::{ LLMClient, OpenAIClient };
-use user::User;
+use character::CharacterSystem;
+use dialogue::DialogueSystem;
 
 #[tokio::main]
 async fn main() {
-    let mut user = match User::load_or_init() {
-        Some(existing_user) => existing_user,
+    let backend_url = env::var("LLM_INET")
+        .expect("Environment variable LLM_INET must be set");
+
+    let mut dialogue = DialogueSystem::new(backend_url.clone());
+
+    let mut character = match CharacterSystem::load_or_init(backend_url.clone()) {
+        Some(existing) => existing,
         None => {
             let name = prompt_input("Hi, what's your name?");
-            User::new(name)
+            CharacterSystem::init(backend_url, name)
         }
     };
 
-    let base_url = env::var("BASE_URL")
-        .expect("Environment variable BASE_URL must be set");
-    let api_key = env::var("API_KEY")
-        .expect("Environment variable API_KEY must be set");
-    let client = OpenAIClient::new(base_url, api_key);
-
-    run_cli_loop(&mut user, &client).await;
+    run_cli_loop(&mut character, &mut dialogue).await;
 }
 
-async fn run_cli_loop(
-    user: &mut User,
-    client: &OpenAIClient,
-) {
+async fn run_cli_loop(character: &mut CharacterSystem, dialogue: &mut DialogueSystem) {
     loop {
         println!("\nCommands: chat | profile | rename | exit");
         let cmd = prompt_input("> ");
 
         match cmd.as_str() {
             "chat" => {
-                chat_loop(user, client).await;
+                chat_loop(character, dialogue).await;
             }
 
             "profile" => {
-                println!("Your name: {}", user.name());
+                println!("Your name: {}", character.name());
+                println!("Profile:\n{}", character.profile_summary());
             }
 
             "rename" => {
                 let new_name = prompt_input("Enter new name:");
-                user.rename(&new_name);
+                character.rename(&new_name);
                 println!("Name updated!");
             }
 
@@ -64,10 +60,7 @@ async fn run_cli_loop(
     }
 }
 
-async fn chat_loop(
-    user: &User,
-    client: &OpenAIClient,
-) {
+async fn chat_loop(character: &mut CharacterSystem, dialogue: &mut DialogueSystem) {
     println!();
     println!("// --- Chat with AI: Nice to see you! --- //");
     println!("Say 'exit' to end the session");
@@ -77,6 +70,12 @@ async fn chat_loop(
 
         if prompt.to_lowercase() == "exit" {
             println!("See you later!");
+
+            // Analyze the conversation to update the character profile.
+            if let Err(e) = character.analyze_conversation(dialogue.history()).await {
+                eprintln!("Warning: profile analysis failed: {e}");
+            }
+
             break;
         }
 
@@ -88,7 +87,7 @@ async fn chat_loop(
         print!("Thinking...");
         io::stdout().flush().unwrap();
 
-        match client.invoke(&prompt).await {
+        match dialogue.send(&prompt).await {
             Ok(reply) => {
                 print!("\r");
                 println!("{reply}\n");
