@@ -1,12 +1,13 @@
-mod client;
+mod llm;
 mod user;
 
 use std::{
-    env,
-    io::{self, Write}
+    env, 
+    io::{self, Write},
+    collections::HashMap
 };
 
-use client::{ OpenAIClient };
+use llm::{ LLMClient, OpenAIClient };
 use user::User;
 
 #[tokio::main]
@@ -33,10 +34,14 @@ async fn run_cli_loop(
     client: &OpenAIClient,
 ) {
     loop {
-        println!("\nCommands: profile | rename | exit");
-        let cmd = prompt_input(">");
+        println!("\nCommands: chat | profile | rename | exit");
+        let cmd = prompt_input("> ");
 
         match cmd.as_str() {
+            "chat" => {
+                chat_loop(user, client).await;
+            }
+
             "profile" => {
                 println!("Your name: {}", user.name());
             }
@@ -46,10 +51,6 @@ async fn run_cli_loop(
                 user.rename(&new_name);
                 println!("Name updated!");
             }
-
-            // "chat" => {
-            //     chat_loop(user, client).await;
-            // }
 
             "exit" => {
                 println!("Bye!");
@@ -63,16 +64,46 @@ async fn run_cli_loop(
     }
 }
 
-// async fn chat_loop(
-//     user: &user,
-//     client: &OpenAIClient,
-// ) {
+async fn chat_loop(
+    user: &User,
+    client: &OpenAIClient,
+) {
+    println!();
+    println!("// --- Chat with AI: Nice to see you! --- //");
+    println!("Say 'exit' to end the session");
 
-// }
+    loop {
+        let prompt = prompt_input("> ");
+
+        if prompt.to_lowercase() == "exit" {
+            println!("See you later!");
+            break;
+        }
+
+        if prompt.is_empty() {
+            continue;
+        }
+
+        print!("\n[{}]\n", String::from("Assistant"));
+        print!("Thinking...");
+        io::stdout().flush().unwrap();
+
+        match client.invoke(&prompt).await {
+            Ok(reply) => {
+                print!("\r");
+                println!("{reply}\n");
+            }
+            Err(e) => {
+                print!("\r");
+                println!("Error calling LLM: {e}");
+            }
+        }
+    }
+}
 
 fn prompt_input(message: &str) -> String {
-    if message == ">" {
-        print!(">");
+    if message == "> " {
+        print!("> ");
     } else {
         println!("{message}");
     }
