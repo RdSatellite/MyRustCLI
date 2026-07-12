@@ -13,7 +13,7 @@ llm/ # Python backend for AI usages
 
 Done:
 - CLI chatting (July 2th)
-- Automatically profile extracting (July 12th)
+- Auto profile extracting (July 12th)
 
 WIP:
 - Diary keeper (Planning, July 12th)
